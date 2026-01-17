@@ -1,100 +1,64 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Eternal Ember ❤️</title>
+<title>Labirinto Shooter</title>
 <script src="https://cdn.jsdelivr.net/npm/p5@1.9.3/lib/p5.min.js"></script>
 <style>
-  body { margin: 0; overflow: hidden; background: black; }
+body{margin:0;overflow:hidden;background:black;}
 </style>
 </head>
 <body>
 
 <script>
-/* =========================
-   VARIÁVEIS
-========================= */
-let player, enemies=[], bullets=[], fires=[], hearts=[];
-let walls=[], door=null;
-let camX=0, camY=0;
-
-let ammo=10, maxAmmo=10;
-let life=10;
-let level=1;
-let anim=0;
+/* ================= CONFIG ================= */
+const TILE = 60;
+let cols, rows;
+let map;
+let player;
+let enemies=[];
+let bullets=[];
+let door=null;
+let life=5;
+let ammo=10;
+let maxAmmo=10;
+let stage=1;
 let gameOver=false;
 
-/* =========================
-   SPRITES
-========================= */
-let catIdle, catMove, catNoAmmo;
-let enemyFly, enemyFire;
-let heartImg, bulletImg;
-
-/* =========================
-   PRELOAD
-========================= */
-function preload(){
-  catIdle = loadImage("sprites/cat_idle.png");
-  catMove = loadImage("sprites/cat_move.png");
-  catNoAmmo = loadImage("sprites/cat_idle_noammo.png");
-  enemyFly = loadImage("sprites/enemy_fly.png");
-  enemyFire = loadImage("sprites/enemy_fire.png");
-  heartImg = loadImage("sprites/heart.png");
-  bulletImg = loadImage("sprites/hero_bullet.png");
+/* ================= MAPA (LABIRINTO REAL) ================= */
+function generateMap(){
+  map=[
+    "111111111111",
+    "100000000001",
+    "101111011101",
+    "101000010001",
+    "101011110101",
+    "100010000001",
+    "101110111101",
+    "100000000001",
+    "111111111111"
+  ];
 }
 
-/* =========================
-   FUNÇÃO SPRITESHEET
-========================= */
-function drawSprite(img,x,y,w,h,f,tf){
-  let fw = img.width/tf;
-  image(img,x,y,w,h,f*fw,0,fw,img.height);
-}
-
-/* =========================
-   SETUP
-========================= */
+/* ================= SETUP ================= */
 function setup(){
   createCanvas(windowWidth,windowHeight);
-
-  player={
-    x:600,y:500,w:40,h:40,speed:3
-  };
-
-  loadLevel();
+  generateMap();
+  player={x:1,y:1};
+  spawnEnemies();
 }
 
-/* =========================
-   FASE
-========================= */
-function loadLevel(){
-  enemies=[]; bullets=[]; fires=[]; hearts=[];
-  door=null; gameOver=false;
-
-  walls=[
-    {x:300,y:200,w:20,h:700},
-    {x:600,y:300,w:400,h:20},
-    {x:900,y:400,w:20,h:700}
-  ];
-
-  for(let i=0;i<level+2;i++){
-    enemies.push({
-      x:random(400,1000),
-      y:random(400,800),
-      life:5,
-      cd:0
-    });
-  }
-
-  hearts.push({x:500,y:600});
+/* ================= INIMIGOS ================= */
+function spawnEnemies(){
+  enemies=[];
+  enemies.push({x:10,y:6,life:3});
+  enemies.push({x:8,y:3,life:3});
 }
 
-/* =========================
-   DRAW
-========================= */
+/* ================= DRAW ================= */
 function draw(){
   background(0);
+
   if(gameOver){
     fill(255,0,0);
     textSize(40);
@@ -103,81 +67,76 @@ function draw(){
     return;
   }
 
-  camX=player.x-width/2;
-  camY=player.y-height/2;
-
-  push();
-  translate(-camX,-camY);
-
-  drawWalls();
-  drawDoor();
-  drawHearts();
-  drawEnemies();
-  drawFires();
-  drawBullets();
+  drawMap();
+  movePlayer();
   drawPlayer();
-
-  pop();
+  drawEnemies();
+  drawBullets();
+  drawDoor();
   drawHUD();
 }
 
-/* =========================
-   PLAYER
-========================= */
-function drawPlayer(){
-  anim=(anim+0.2)%8;
+/* ================= MAPA ================= */
+function drawMap(){
+  for(let y=0;y<map.length;y++){
+    for(let x=0;x<map[y].length;x++){
+      if(map[y][x]==="1"){
+        fill(120);
+        rect(x*TILE,y*TILE,TILE,TILE);
+      }
+    }
+  }
+}
 
+/* ================= PLAYER ================= */
+function movePlayer(){
   let nx=player.x;
   let ny=player.y;
 
-  if(keyIsDown(65)) nx-=player.speed;
-  if(keyIsDown(68)) nx+=player.speed;
-  if(keyIsDown(87)) ny-=player.speed;
-  if(keyIsDown(83)) ny+=player.speed;
+  if(keyIsDown(87)) ny--;
+  if(keyIsDown(83)) ny++;
+  if(keyIsDown(65)) nx--;
+  if(keyIsDown(68)) nx++;
 
-  if(!collide(nx,player.y)) player.x=nx;
-  if(!collide(player.x,ny)) player.y=ny;
-
-  if(ammo<=0)
-    drawSprite(catNoAmmo,player.x,player.y,40,40,floor(anim)%5,5);
-  else
-    drawSprite(catMove,player.x,player.y,40,40,floor(anim)%8,8);
-}
-
-/* =========================
-   COLISÃO
-========================= */
-function collide(x,y){
-  for(let w of walls){
-    if(x< w.x+w.w && x+player.w>w.x &&
-       y< w.y+w.h && y+player.h>w.y)
-       return true;
+  if(map[ny][nx]==="0"){
+    player.x=nx;
+    player.y=ny;
   }
-  return false;
 }
 
-/* =========================
-   TIRO
-========================= */
+function drawPlayer(){
+  fill(0,255,0);
+  rect(player.x*TILE+10,player.y*TILE+10,40,40);
+}
+
+/* ================= TIRO ================= */
 function mousePressed(){
-  if(ammo>0){
-    bullets.push({
-      x:player.x+20,y:player.y+20,
-      dx:(mouseX-width/2)*0.05,
-      dy:(mouseY-height/2)*0.05
-    });
-    ammo--;
-  }
+  if(ammo<=0) return;
+  ammo--;
+  bullets.push({
+    x:player.x,
+    y:player.y,
+    dx:mouseX>width/2?1:-1,
+    dy:mouseY>height/2?1:-1
+  });
 }
 
 function drawBullets(){
   for(let i=bullets.length-1;i>=0;i--){
     let b=bullets[i];
-    b.x+=b.dx; b.y+=b.dy;
-    image(bulletImg,b.x,b.y,12,12);
+    b.x+=b.dx*0.2;
+    b.y+=b.dy*0.2;
+
+    if(map[Math.floor(b.y)][Math.floor(b.x)]==="1"){
+      bullets.splice(i,1);
+      continue;
+    }
+
+    fill(255,255,0);
+    ellipse(b.x*TILE+30,b.y*TILE+30,8);
 
     for(let e of enemies){
-      if(dist(b.x,b.y,e.x,e.y)<20){
+      if(dist(b.x,b.y,e.x,e.y)<0.5){
         e.life--;
         bullets.splice(i,1);
         break;
@@ -186,100 +145,65 @@ function drawBullets(){
   }
 }
 
-/* =========================
-   INIMIGOS
-========================= */
+/* ================= INIMIGOS ================= */
 function drawEnemies(){
-  for(let e of enemies){
-    e.x+=(player.x-e.x)*0.01;
-    e.y+=(player.y-e.y)*0.01;
+  for(let i=enemies.length-1;i>=0;i--){
+    let e=enemies[i];
+    let dx=Math.sign(player.x-e.x);
+    let dy=Math.sign(player.y-e.y);
 
-    drawSprite(enemyFly,e.x,e.y,40,40,floor(frameCount/8)%4,4);
+    if(map[e.y][e.x+dx]==="0") e.x+=dx*0.02;
+    if(map[e.y+dy][e.x]==="0") e.y+=dy*0.02;
 
-    if(e.cd<=0){
-      fires.push({
-        x:e.x,y:e.y,
-        dx:(player.x-e.x)*0.03,
-        dy:(player.y-e.y)*0.03
-      });
-      e.cd=120;
-    } else e.cd--;
-  }
+    fill(255,0,0);
+    rect(e.x*TILE+15,e.y*TILE+15,30,30);
 
-  enemies=enemies.filter(e=>e.life>0);
-
-  if(enemies.length===0 && door===null){
-    door={x:700,y:250,w:40,h:60};
-  }
-}
-
-/* =========================
-   FOGO
-========================= */
-function drawFires(){
-  for(let i=fires.length-1;i>=0;i--){
-    let f=fires[i];
-    f.x+=f.dx; f.y+=f.dy;
-    image(enemyFire,f.x,f.y,16,16);
-
-    if(dist(f.x,f.y,player.x,player.y)<20){
+    if(dist(player.x,player.y,e.x,e.y)<0.6){
       life--;
-      fires.splice(i,1);
-      if(life<=0) gameOver=true;
+      if(life<=0){
+        life=0;
+        gameOver=true;
+      }
     }
+
+    if(e.life<=0){
+      enemies.splice(i,1);
+    }
+  }
+
+  if(enemies.length===0 && !door){
+    door={x:10,y:1};
   }
 }
 
-/* =========================
-   CORAÇÃO
-========================= */
-function drawHearts(){
-  for(let i=hearts.length-1;i>=0;i--){
-    let h=hearts[i];
-    image(heartImg,h.x,h.y,28,28);
-    if(dist(player.x,player.y,h.x,h.y)<30){
-      life=min(10,life+1);
-      hearts.splice(i,1);
-    }
-  }
-}
-
-/* =========================
-   PORTA
-========================= */
+/* ================= PORTA ================= */
 function drawDoor(){
   if(!door) return;
   fill(0,0,255);
-  rect(door.x,door.y,door.w,door.h);
+  rect(door.x*TILE+10,door.y*TILE+10,40,40);
 
-  if(player.x<door.x+door.w &&
-     player.x+player.w>door.x &&
-     player.y<door.y+door.h &&
-     player.y+player.h>door.y){
-    level++;
-    loadLevel();
+  if(player.x===door.x && player.y===door.y){
+    stage++;
+    ammo=maxAmmo;
+    door=null;
+    spawnEnemies();
   }
 }
 
-/* =========================
-   PAREDES
-========================= */
-function drawWalls(){
-  fill(120);
-  for(let w of walls){
-    rect(w.x,w.y,w.w,w.h);
+/* ================= RECARREGAR ================= */
+function keyPressed(){
+  if(key==="r"||key==="R"){
+    ammo=maxAmmo;
   }
 }
 
-/* =========================
-   HUD
-========================= */
+/* ================= HUD ================= */
 function drawHUD(){
   fill(255);
   textSize(16);
-  text("❤️ Vida: "+life,20,30);
-  text("🔫 Ammo: "+ammo+"/"+maxAmmo,20,55);
-  text("Stage: "+level,20,80);
+  text("❤️ Vida: "+life,10,20);
+  text("🔫 Ammo: "+ammo+"/"+maxAmmo,10,40);
+  text("Stage: "+stage,10,60);
 }
 </script>
 
