@@ -5,323 +5,313 @@
 <title>Maze of Our Love ❤️</title>
 
 <style>
-html, body {
-  margin: 0;
-  padding: 0;
-  width: 100%;
-  height: 100%;
-  background: black;
-  overflow: hidden;
+html,body{
+  margin:0;
+  padding:0;
+  background:black;
+  overflow:hidden;
+  touch-action:none;
 }
-
-canvas {
-  width: 100vw;
-  height: 100vh;
-  display: block;
+canvas{
+  position:absolute;
+  top:0;left:0;
 }
-
-#playBtn {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%) scale(1);
-  padding: 20px 60px;
-  font-size: 32px;
-  border: none;
-  border-radius: 20px;
-  background: #ff4d6d;
-  color: white;
-  cursor: pointer;
-  animation: pulse 1.5s infinite;
+.control{
+  position:absolute;
+  width:90px;
+  height:90px;
+  border-radius:50%;
+  background:rgba(255,255,255,.15);
+  border:2px solid rgba(255,255,255,.3);
+  z-index:10;
 }
-
-@keyframes pulse {
-  0% { transform: translate(-50%, -50%) scale(1); }
-  50% { transform: translate(-50%, -50%) scale(1.1); }
-  100% { transform: translate(-50%, -50%) scale(1); }
+#joy{left:20px;bottom:20px;}
+#shoot{right:20px;bottom:20px;}
+#reload{
+  right:140px;
+  bottom:20px;
+  color:white;
+  text-align:center;
+  line-height:90px;
+  font-family:Arial;
 }
 </style>
 </head>
 
 <body>
 
-<button id="playBtn">PLAY</button>
 <canvas id="game"></canvas>
 
+<div id="joy" class="control"></div>
+<div id="reload" class="control">R</div>
+<div id="shoot" class="control"></div>
+
 <script>
+/* ================= CANVAS ================= */
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
+const DPR = window.devicePixelRatio || 1;
 
-function resizeCanvas() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+function resize(){
+  canvas.width = innerWidth * DPR;
+  canvas.height = innerHeight * DPR;
+  canvas.style.width = innerWidth + "px";
+  canvas.style.height = innerHeight + "px";
+  ctx.setTransform(DPR,0,0,DPR,0,0);
 }
-resizeCanvas();
-window.addEventListener("resize", resizeCanvas);
-window.addEventListener("orientationchange", resizeCanvas);
+resize();
+addEventListener("resize", resize);
 
-let gameState = "menu";
-let level = 1;
+/* ================= LOAD ================= */
+const load = src => { const i = new Image(); i.src = src; return i; };
 
-const keys = {};
-document.addEventListener("keydown", e => keys[e.key] = true);
-document.addEventListener("keyup", e => keys[e.key] = false);
-
-//////////////// HERO //////////////////
+/* ================= HERO SPRITES ================= */
 const heroSprites = {
-  idle:{src:"sprites/cat_idle.png",frames:5},
-  move:{src:"sprites/cat_move.png",frames:8},
-  hurt:{src:"sprites/cat_hurt.png",frames:4},
-  noammo:{src:"sprites/cat_noammo.png",frames:5},
-  reload:{src:"sprites/cat_reload.png",frames:41},
-  shooting:{src:"sprites/cat_shooting.png",frames:13}
+ idle:{ img:load("sprites/hero/cat_idle.png"), frames:5 },
+ move:{ img:load("sprites/hero/cat_move.png"), frames:8 },
+ hurt:{ img:load("sprites/hero/cat_hurt.png"), frames:4 },
+ noammo:{ img:load("sprites/hero/cat_noammo.png"), frames:5 },
+ reload:{ img:load("sprites/hero/cat_reload.png"), frames:41 },
+ shoot:{ img:load("sprites/hero/cat_shooting.png"), frames:13 }
 };
 
-for(let k in heroSprites){
-  heroSprites[k].img = new Image();
-  heroSprites[k].img.src = heroSprites[k].src;
-}
-
-const hero = {
-  x: 100, y: 200, w: 64, h: 64,
-  speed: 3,
-  life: 5, maxLife: 5,
-  ammo: 10, maxAmmo: 10,
-  state: "idle",
-  frame: 0, tick: 0, fs: 5
-};
-
-//////////////// ENEMY //////////////////
+/* ================= ENEMY SPRITES ================= */
 const enemySprites = {
-  idle:{src:"sprites/enemy_idle.png",frames:4},
-  flying:{src:"sprites/enemy_fly.png",frames:4},
-  attack:{src:"sprites/enemy_attack.png",frames:8},
-  hurt:{src:"sprites/enemy_hurt.png",frames:4},
-  death:{src:"sprites/enemy_death.png",frames:6},
-  projectile:{src:"sprites/enemy_fire.png",frames:1}
+ idle:{ img:load("sprites/enemy/enemy_idle.png"), frames:4 },
+ fly:{ img:load("sprites/enemy/enemy_fly.png"), frames:4 },
+ attack:{ img:load("sprites/enemy/enemy_attack.png"), frames:8 },
+ hurt:{ img:load("sprites/enemy/enemy_hurt.png"), frames:4 },
+ death:{ img:load("sprites/enemy/enemy_death.png"), frames:6 },
+ projectile:{ img:load("sprites/enemy/enemy_projectile.png"), frames:1 }
 };
 
-for(let k in enemySprites){
-  enemySprites[k].img = new Image();
-  enemySprites[k].img.src = enemySprites[k].src;
-}
+const heartImg = load("sprites/items/heart.png");
 
+/* ================= HERO ================= */
+const hero = {
+ x:100,y:100,w:64,h:64,
+ speed:3,
+ life:5,maxLife:5,
+ ammo:10,maxAmmo:10,
+ state:"idle",
+ frame:0,tick:0,
+ hurtTimer:0
+};
+
+/* ================= GAME STATE ================= */
+let level = 1;
 let enemies = [];
-function spawnEnemies() {
-  enemies = [];
-  for (let i = 0; i < level + 1; i++) {
+let heroBullets = [];
+let enemyBullets = [];
+let heart = null;
+
+/* ================= LABYRINTH ================= */
+const walls = [
+ {x:200,y:80,w:20,h:300},
+ {x:400,y:200,w:20,h:300},
+ {x:600,y:80,w:20,h:300}
+];
+
+/* ================= CONTROLS ================= */
+let moveX=0, moveY=0;
+const joy = document.getElementById("joy");
+
+joy.ontouchmove = e=>{
+  const t = e.touches[0];
+  moveX = Math.sign(t.clientX - 80);
+  moveY = Math.sign(t.clientY - (innerHeight - 80));
+};
+joy.ontouchend = ()=>moveX=moveY=0;
+
+document.getElementById("shoot").ontouchstart = shoot;
+document.getElementById("reload").ontouchstart = ()=>{
+  hero.state="reload";
+  hero.frame=0;
+  hero.ammo = hero.maxAmmo;
+};
+
+/* ================= SPAWN ================= */
+function spawnLevel(){
+  enemies=[];
+  enemyBullets=[];
+  heroBullets=[];
+  for(let i=0;i<level+1;i++){
     enemies.push({
-      x: canvas.width - 200 - i * 80,
-      y: 150 + i * 60,
-      w: 64, h: 64,
-      life: 5,
-      state: "idle",
-      frame: 0, tick: 0, fs: 6,
-      cd: 80
+      x:500+i*80,
+      y:150+i*60,
+      w:64,h:64,
+      life:5,
+      state:"fly",
+      frame:0,tick:0,
+      cooldown:120
     });
   }
+  heart={x:350,y:250,w:32,h:32};
 }
+spawnLevel();
 
-//////////////// BULLETS //////////////////
-const heroBullets = [];
-const enemyBullets = [];
-
-//////////////// LIFE PICKUP //////////////////
-const heartImg = new Image();
-heartImg.src = "sprites/heart.png";
-let hearts = [{x:400,y:300}];
-
-//////////////// MOBILE INPUT //////////////////
-let shoot = false;
-canvas.addEventListener("touchstart", e => {
-  if (e.touches[0].clientX > canvas.width / 2) shoot = true;
-});
-canvas.addEventListener("touchend", () => shoot = false);
-
-//////////////// MENU //////////////////
-document.getElementById("playBtn").onclick = () => {
-  gameState = "fade";
-  setTimeout(() => {
-    gameState = "game";
-    spawnEnemies();
-    document.getElementById("playBtn").style.display = "none";
-  }, 700);
-};
-
-//////////////// GAME LOOP //////////////////
-function gameLoop() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  if (gameState === "menu") {
-    drawTitle();
-    requestAnimationFrame(gameLoop);
-    return;
-  }
-
-  if (gameState === "fade") {
-    ctx.fillStyle = "rgba(0,0,0,0.15)";
-    ctx.fillRect(0,0,canvas.width,canvas.height);
-    requestAnimationFrame(gameLoop);
-    return;
-  }
-
-  updateHero();
-  updateEnemies();
-  updateBullets();
-
-  drawLabyrinth();
-  drawHearts();
-  drawHero();
-  drawEnemies();
-  drawUI();
-
-  if (enemies.length === 0) {
-    level++;
-    if (level > 5) {
-      drawFinalMessage();
-      return;
-    }
-    spawnEnemies();
-  }
-
-  requestAnimationFrame(gameLoop);
+/* ================= LOOP ================= */
+function loop(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  update();
+  draw();
+  requestAnimationFrame(loop);
 }
-gameLoop();
+loop();
 
-//////////////// FUNCTIONS //////////////////
-function drawTitle() {
-  ctx.fillStyle = "#fff";
-  ctx.font = "48px Arial";
-  ctx.textAlign = "center";
-  ctx.fillText("Maze of Our Love ❤️", canvas.width/2, canvas.height/2 - 100);
-}
+/* ================= UPDATE ================= */
+function update(){
+  hero.x+=moveX*hero.speed;
+  hero.y+=moveY*hero.speed;
 
-function updateHero() {
-  let moving = false;
-  if (keys["a"]) { hero.x -= hero.speed; moving = true; }
-  if (keys["d"]) { hero.x += hero.speed; moving = true; }
-  if (keys["w"]) { hero.y -= hero.speed; moving = true; }
-  if (keys["s"]) { hero.y += hero.speed; moving = true; }
+  hero.state = (moveX||moveY) ? "move" : "idle";
 
-  hero.state = moving ? "move" : "idle";
+  enemies.forEach((e,ei)=>{
+    if(e.life<=0) return;
 
-  if ((keys[" "] || shoot) && hero.ammo > 0) {
-    hero.state = "shooting";
-    heroBullets.push({x: hero.x+32, y: hero.y+32, vx: 6});
-    hero.ammo--;
-  }
-
-  if (keys["r"]) {
-    hero.state = "reload";
-    hero.ammo = hero.maxAmmo;
-  }
-
-  animate(hero, heroSprites);
-}
-
-function updateEnemies() {
-  enemies.forEach((e, ei) => {
     const dx = hero.x - e.x;
     const dy = hero.y - e.y;
-    const d = Math.hypot(dx, dy);
+    const d = Math.hypot(dx,dy);
 
-    if (d < 300) {
-      e.state = "flying";
-      e.x += Math.sign(dx) * 1.3;
-      e.y += Math.sign(dy) * 1.3;
+    if(d<300){
+      e.x+=Math.sign(dx)*1.4;
+      e.y+=Math.sign(dy)*1.4;
+      e.state="fly";
+    }
 
-      e.cd--;
-      if (e.cd <= 0) {
-        enemyBullets.push({
-          x: e.x+32, y: e.y+32,
-          vx: Math.sign(dx)*4,
-          vy: Math.sign(dy)*4
-        });
-        e.cd = 90;
+    e.cooldown--;
+    if(e.cooldown<=0){
+      enemyBullets.push({
+        x:e.x+32,y:e.y+32,
+        vx:Math.sign(dx)*4,
+        vy:Math.sign(dy)*4,
+        w:16,h:16
+      });
+      e.cooldown=120;
+    }
+
+    if(hit(e,hero) && hero.hurtTimer<=0){
+      hero.life--;
+      hero.state="hurt";
+      hero.hurtTimer=30;
+      if(hero.life<=0){
+        hero.life=hero.maxLife;
+        hero.ammo=hero.maxAmmo;
+        spawnLevel();
       }
-    } else e.state = "idle";
+    }
+  });
 
-    animate(e, enemySprites);
+  if(hero.hurtTimer>0) hero.hurtTimer--;
 
-    heroBullets.forEach((b, bi) => {
-      if (hit(b, e)) {
+  heroBullets.forEach((b,i)=>{
+    b.x+=b.vx;
+    enemies.forEach((e,ei)=>{
+      if(e.life>0 && hit(b,e)){
         e.life--;
-        heroBullets.splice(bi,1);
-        if (e.life <= 0) enemies.splice(ei,1);
+        heroBullets.splice(i,1);
+        if(e.life<=0) e.state="death";
       }
     });
   });
-}
 
-function updateBullets() {
-  heroBullets.forEach(b => b.x += b.vx);
-  enemyBullets.forEach((b, bi) => {
-    b.x += b.vx;
-    b.y += b.vy;
-    if (hit(b, hero)) {
+  enemyBullets.forEach((b,i)=>{
+    b.x+=b.vx;
+    b.y+=b.vy;
+    if(hit(b,hero)){
       hero.life--;
-      enemyBullets.splice(bi,1);
-      if (hero.life <= 0) {
-        hero.life = hero.maxLife;
-        hero.ammo = hero.maxAmmo;
-        spawnEnemies();
-      }
+      enemyBullets.splice(i,1);
     }
   });
-}
 
-function drawHero() { drawSprite(hero, heroSprites); }
-function drawEnemies() { enemies.forEach(e => drawSprite(e, enemySprites)); }
+  if(heart && hit(hero,heart)){
+    hero.life=Math.min(hero.maxLife,hero.life+1);
+    heart=null;
+  }
 
-function drawSprite(o, sprites) {
-  const sp = sprites[o.state];
-  ctx.drawImage(sp.img, o.frame*64, 0, 64, 64, o.x, o.y, 64, 64);
-}
-
-function animate(o, sprites) {
-  o.tick++;
-  if (o.tick > o.fs) {
-    o.tick = 0;
-    o.frame++;
-    if (o.frame >= sprites[o.state].frames) o.frame = 0;
+  if(enemies.every(e=>e.life<=0)){
+    level++;
+    if(level>5){
+      alert("Happy Birthday ❤️ I love you forever!");
+      level=1;
+    }
+    spawnLevel();
   }
 }
 
-function hit(a, b) {
-  return a.x < b.x + b.w &&
-         a.x + 10 > b.x &&
-         a.y < b.y + b.h &&
-         a.y + 10 > b.y;
+/* ================= DRAW ================= */
+function draw(){
+  drawLabyrinth();
+  drawHeart();
+  drawHero();
+  drawEnemies();
+  drawBullets();
+  drawUI();
 }
 
-function drawLabyrinth() {
-  ctx.strokeStyle = "#333";
-  ctx.strokeRect(40, 40, canvas.width-80, canvas.height-80);
+function drawAnim(sprite,obj){
+  obj.tick++;
+  if(obj.tick>8){
+    obj.frame=(obj.frame+1)%sprite.frames;
+    obj.tick=0;
+  }
+  ctx.drawImage(
+    sprite.img,
+    obj.frame*64,0,64,64,
+    obj.x,obj.y,64,64
+  );
 }
 
-function drawUI() {
-  ctx.fillStyle = "red";
-  ctx.fillRect(20, 20, hero.life * 30, 12);
-  ctx.fillStyle = "yellow";
-  ctx.fillRect(20, 40, hero.ammo * 15, 10);
+function drawHero(){
+  drawAnim(heroSprites[hero.state],hero);
 }
 
-function drawHearts() {
-  hearts.forEach((h, hi) => {
-    ctx.drawImage(heartImg, h.x, h.y, 32, 32);
-    if (hit(hero, h)) {
-      hero.life = Math.min(hero.maxLife, hero.life + 1);
-      hearts.splice(hi,1);
-    }
+function drawEnemies(){
+  enemies.forEach(e=>{
+    if(e.life>0) drawAnim(enemySprites[e.state],e);
   });
 }
 
-function drawFinalMessage() {
-  ctx.fillStyle = "#fff";
-  ctx.font = "42px Arial";
-  ctx.textAlign = "center";
-  ctx.fillText("Happy Birthday ❤️", canvas.width/2, canvas.height/2 - 40);
-  ctx.fillText("I Love You Forever", canvas.width/2, canvas.height/2 + 20);
+function drawBullets(){
+  ctx.fillStyle="yellow";
+  heroBullets.forEach(b=>ctx.fillRect(b.x,b.y,6,4));
+  enemyBullets.forEach(b=>{
+    ctx.drawImage(enemySprites.projectile.img,b.x,b.y,16,16);
+  });
+}
+
+function drawLabyrinth(){
+  ctx.fillStyle="#333";
+  walls.forEach(w=>ctx.fillRect(w.x,w.y,w.w,w.h));
+}
+
+function drawHeart(){
+  if(heart) ctx.drawImage(heartImg,heart.x,heart.y,32,32);
+}
+
+function drawUI(){
+  ctx.fillStyle="red";
+  ctx.fillRect(20,20,hero.life*30,10);
+  ctx.fillStyle="yellow";
+  ctx.fillRect(20,40,hero.ammo*15,10);
+}
+
+/* ================= ACTIONS ================= */
+function shoot(){
+  if(hero.ammo<=0){
+    hero.state="noammo";
+    return;
+  }
+  hero.state="shoot";
+  heroBullets.push({
+    x:hero.x+32,y:hero.y+32,
+    vx:6,vy:0,w:6,h:4
+  });
+  hero.ammo--;
+}
+
+function hit(a,b){
+  return a.x<b.x+b.w && a.x+a.w>b.x && a.y<b.y+b.h && a.y+a.h>b.y;
 }
 </script>
 
