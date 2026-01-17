@@ -12,13 +12,18 @@
 
 <script>
 /* =========================
-   ESTADOS DO JOGO
+   TAMANHO DO MAPA
+========================= */
+const MAP_WIDTH = 1200;
+const MAP_HEIGHT = 900;
+
+/* =========================
+   ESTADOS
 ========================= */
 const STATE_MENU = 0;
 const STATE_PLAY = 1;
 const STATE_PAUSE = 2;
 const STATE_GAMEOVER = 3;
-
 let gameState = STATE_MENU;
 
 /* =========================
@@ -69,12 +74,11 @@ function drawSprite(img,x,y,w,h,f,tf){
 ========================= */
 function setup(){
   createCanvas(windowWidth,windowHeight);
-
   player={ x:600,y:500,w:40,h:40,speed:3 };
 }
 
 /* =========================
-   INICIAR JOGO
+   START
 ========================= */
 function startGame(){
   level=1;
@@ -115,28 +119,15 @@ function loadLevel(){
 function draw(){
   background(0);
 
-  if(gameState===STATE_MENU){
-    drawMenu();
-    return;
-  }
-
-  if(gameState===STATE_PAUSE){
-    drawGame(true);
-    drawPause();
-    return;
-  }
-
-  if(gameState===STATE_GAMEOVER){
-    drawGame(true);
-    drawGameOver();
-    return;
-  }
+  if(gameState===STATE_MENU){ drawMenu(); return; }
+  if(gameState===STATE_PAUSE){ drawGame(true); drawPause(); return; }
+  if(gameState===STATE_GAMEOVER){ drawGame(true); drawGameOver(); return; }
 
   drawGame(false);
 }
 
 /* =========================
-   JOGO
+   GAME
 ========================= */
 function drawGame(freeze){
   if(!freeze){
@@ -144,8 +135,11 @@ function drawGame(freeze){
     if(hitCD>0) hitCD--;
   }
 
-  camX=player.x-width/2;
-  camY=player.y-height/2;
+  camX = constrain(player.x - width/2, 0, MAP_WIDTH - width);
+  camY = constrain(player.y - height/2, 0, MAP_HEIGHT - height);
+
+  if(MAP_WIDTH < width) camX = -(width - MAP_WIDTH)/2;
+  if(MAP_HEIGHT < height) camY = -(height - MAP_HEIGHT)/2;
 
   push();
   translate(-camX,-camY);
@@ -163,7 +157,7 @@ function drawGame(freeze){
 }
 
 /* =========================
-   MENU
+   MENU / PAUSE / GAMEOVER
 ========================= */
 function drawMenu(){
   fill(255);
@@ -172,34 +166,20 @@ function drawMenu(){
   text("ETERNAL EMBER",width/2,height/2-80);
   textSize(20);
   text("Clique para começar",width/2,height/2);
-  textSize(14);
-  text("ESC pausa o jogo",width/2,height/2+40);
 }
 
-/* =========================
-   PAUSE
-========================= */
 function drawPause(){
-  fill(0,180);
-  rect(0,0,width,height);
-  fill(255);
+  fill(0,180); rect(0,0,width,height);
+  fill(255); textSize(40);
   textAlign(CENTER,CENTER);
-  textSize(40);
   text("PAUSADO",width/2,height/2);
 }
 
-/* =========================
-   GAME OVER
-========================= */
 function drawGameOver(){
-  fill(0,200);
-  rect(0,0,width,height);
-  fill(255,0,0);
+  fill(0,200); rect(0,0,width,height);
+  fill(255,0,0); textSize(40);
   textAlign(CENTER,CENTER);
-  textSize(40);
   text("GAME OVER",width/2,height/2);
-  textSize(18);
-  text("Clique para voltar ao menu",width/2,height/2+50);
 }
 
 /* =========================
@@ -208,8 +188,7 @@ function drawGameOver(){
 function drawPlayer(freeze){
   if(!freeze) anim=(anim+0.2)%8;
 
-  let nx=player.x;
-  let ny=player.y;
+  let nx=player.x, ny=player.y;
 
   if(!freeze){
     if(keyIsDown(65)) nx-=player.speed;
@@ -223,29 +202,19 @@ function drawPlayer(freeze){
 
   let moving = keyIsDown(65)||keyIsDown(68)||keyIsDown(87)||keyIsDown(83);
 
-  if(ammo<=0){
+  if(ammo<=0)
     drawSprite(catNoAmmo,player.x,player.y,40,40,floor(anim)%5,5);
-  } else if(moving){
+  else if(moving)
     drawSprite(catMove,player.x,player.y,40,40,floor(anim)%8,8);
-  } else {
+  else
     drawSprite(catIdle,player.x,player.y,40,40,floor(anim)%4,4);
-  }
 }
 
 /* =========================
    INPUTS
 ========================= */
 function mousePressed(){
-  if(gameState===STATE_MENU){
-    startGame();
-    return;
-  }
-
-  if(gameState===STATE_GAMEOVER){
-    gameState=STATE_MENU;
-    return;
-  }
-
+  if(gameState===STATE_MENU){ startGame(); return; }
   if(gameState!==STATE_PLAY) return;
 
   if(ammo>0){
@@ -264,20 +233,19 @@ function keyPressed(){
     else if(gameState===STATE_PAUSE) gameState=STATE_PLAY;
   }
 
-  if(gameState===STATE_PLAY && (key==='r'||key==='R') && ammo<maxAmmo && reloadCD===0){
+  if(gameState===STATE_PLAY && (key==='r'||key==='R') && reloadCD===0){
     ammo=maxAmmo;
     reloadCD=60;
   }
 }
 
 /* =========================
-   RESTO DO CÓDIGO
+   RESTO
 ========================= */
 function collide(x,y){
   for(let w of walls){
     if(x<w.x+w.w && x+player.w>w.x &&
-       y<w.y+w.h && y+player.h>w.y)
-       return true;
+       y<w.y+w.h && y+player.h>w.y) return true;
   }
   return false;
 }
@@ -288,20 +256,9 @@ function drawBullets(freeze){
     if(!freeze){ b.x+=b.dx; b.y+=b.dy; }
     image(bulletImg,b.x,b.y,12,12);
 
-    if(
-      b.x<camX-50||b.x>camX+width+50||
-      b.y<camY-50||b.y>camY+height+50
-    ){
+    if(dist(b.x,b.y,player.x,player.y)<20){
       bullets.splice(i,1);
-      continue;
-    }
-
-    for(let e of enemies){
-      if(dist(b.x,b.y,e.x,e.y)<20){
-        e.life--;
-        bullets.splice(i,1);
-        break;
-      }
+      break;
     }
   }
 }
@@ -312,25 +269,16 @@ function drawEnemies(freeze){
       e.x+=(player.x-e.x)*0.01;
       e.y+=(player.y-e.y)*0.01;
     }
-
     drawSprite(enemyFly,e.x,e.y,40,40,floor(frameCount/8)%4,4);
 
-    if(!freeze){
-      if(e.cd<=0){
-        fires.push({
-          x:e.x,y:e.y,
-          dx:(player.x-e.x)*0.03,
-          dy:(player.y-e.y)*0.03
-        });
-        e.cd=120;
-      } else e.cd--;
+    if(!freeze && e.cd--<=0){
+      fires.push({
+        x:e.x,y:e.y,
+        dx:(player.x-e.x)*0.03,
+        dy:(player.y-e.y)*0.03
+      });
+      e.cd=120;
     }
-  }
-
-  enemies=enemies.filter(e=>e.life>0);
-
-  if(enemies.length===0 && door===null){
-    door={x:700,y:250,w:40,h:60};
   }
 }
 
@@ -340,9 +288,8 @@ function drawFires(freeze){
     if(!freeze){ f.x+=f.dx; f.y+=f.dy; }
     image(enemyFire,f.x,f.y,16,16);
 
-    if(dist(f.x,f.y,player.x,player.y)<20 && hitCD===0 && !freeze){
-      life--;
-      hitCD=30;
+    if(dist(f.x,f.y,player.x,player.y)<20 && hitCD===0){
+      life--; hitCD=30;
       fires.splice(i,1);
       if(life<=0) gameState=STATE_GAMEOVER;
     }
@@ -364,14 +311,7 @@ function drawDoor(){
   if(!door) return;
   fill(0,0,255);
   rect(door.x,door.y,door.w,door.h);
-
-  if(player.x<door.x+door.w &&
-     player.x+player.w>door.x &&
-     player.y<door.y+door.h &&
-     player.y+player.h>door.y){
-    level++;
-    loadLevel();
-  }
+  if(collide(door.x,door.y)){ level++; loadLevel(); }
 }
 
 function drawWalls(){
@@ -385,7 +325,6 @@ function drawHUD(){
   text(`❤️ Vida: ${life}`,20,30);
   text(`🔫 Ammo: ${ammo}/${maxAmmo}`,20,55);
   text(`Stage: ${level}`,20,80);
-  if(reloadCD>0) text("RECARREGANDO...",20,105);
 }
 
 function windowResized(){
