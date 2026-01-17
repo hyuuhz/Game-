@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>💖 Eternal Ember 💖</title>
+  <title>Eternal Ember ❤️</title>
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.3/lib/p5.min.js"></script>
   <style>
     body {
@@ -19,42 +19,52 @@
 
 <script>
 /* =========================
-   VARIÁVEIS GLOBAIS
+   VARIÁVEIS GERAIS
 ========================= */
 let player, enemies = [], bullets = [], fires = [], hearts = [];
 let camX = 0, camY = 0;
 
-let catIdle, catMove, catReload, catShoot, catNoAmmo;
-let enemyIdle, enemyAttack, enemyFly, enemyFire, enemyHurt, enemyDeath;
-let heartImg, bulletImg;
-
-let ammo = 10;
-let maxAmmo = 10;
+let ammo = 10, maxAmmo = 10;
 let playerLife = 10;
 let currentLevel = 1;
 
+let animFrame = 0;
+
 /* =========================
-   PRELOAD (SPRITES)
+   SPRITES
+========================= */
+let catIdle, catMove, catReload, catShoot, catNoAmmo;
+let enemyFly, enemyFire;
+let heartImg, bulletImg;
+
+/* =========================
+   PRELOAD
 ========================= */
 function preload() {
-  // PLAYER
   catIdle   = loadImage("sprites/cat_idle.png");
   catMove   = loadImage("sprites/cat_move.png");
   catReload = loadImage("sprites/cat_reload.png");
   catShoot  = loadImage("sprites/cat_shooting.png");
   catNoAmmo = loadImage("sprites/cat_idle_noammo.png");
 
-  // ENEMY
-  enemyIdle   = loadImage("sprites/enemy_idle.png");
-  enemyAttack = loadImage("sprites/enemy_attack.png");
-  enemyFly    = loadImage("sprites/enemy_fly.png");
-  enemyFire   = loadImage("sprites/enemy_fire.png");
-  enemyHurt   = loadImage("sprites/enemy_hurt.png");
-  enemyDeath  = loadImage("sprites/enemy_death.png");
+  enemyFly  = loadImage("sprites/enemy_fly.png");
+  enemyFire = loadImage("sprites/enemy_fire.png");
 
-  // ITEMS
   heartImg  = loadImage("sprites/heart.png");
   bulletImg = loadImage("sprites/hero_bullet.png");
+}
+
+/* =========================
+   FUNÇÃO DE SPRITESHEET
+========================= */
+function drawSprite(img, x, y, w, h, frame, totalFrames) {
+  let fw = img.width / totalFrames;
+  image(
+    img,
+    x, y, w, h,
+    frame * fw, 0,
+    fw, img.height
+  );
 }
 
 /* =========================
@@ -62,37 +72,41 @@ function preload() {
 ========================= */
 function setup() {
   createCanvas(windowWidth, windowHeight);
+
   player = {
-    x: 400,
-    y: 300,
+    x: 600,
+    y: 500,
     w: 48,
     h: 48,
     speed: 3
   };
+
   loadLevel(currentLevel);
 }
 
 /* =========================
-   LEVELS
+   FASES
 ========================= */
 function loadLevel(level) {
   enemies = [];
   hearts = [];
+  fires = [];
+  bullets = [];
 
-  let enemyCount = level + 2;
+  let count = level + 2;
 
-  for (let i = 0; i < enemyCount; i++) {
+  for (let i = 0; i < count; i++) {
     enemies.push({
-      x: random(200, 1200),
-      y: random(200, 800),
+      x: random(300, 1100),
+      y: random(300, 900),
       life: 5,
-      fireCooldown: 0
+      cooldown: 0
     });
   }
 
   hearts.push({
-    x: random(300, 1000),
-    y: random(300, 700)
+    x: random(400, 1000),
+    y: random(400, 800)
   });
 }
 
@@ -100,7 +114,7 @@ function loadLevel(level) {
    DRAW
 ========================= */
 function draw() {
-  background(10);
+  background(0);
 
   camX = player.x - width / 2;
   camY = player.y - height / 2;
@@ -124,14 +138,18 @@ function draw() {
    PLAYER
 ========================= */
 function drawPlayer() {
-  let moving = keyIsDown(65) || keyIsDown(68) || keyIsDown(87) || keyIsDown(83);
+  animFrame = (animFrame + 0.2) % 8;
+
+  let moving =
+    keyIsDown(65) || keyIsDown(68) ||
+    keyIsDown(87) || keyIsDown(83);
 
   if (ammo <= 0) {
-    image(catNoAmmo, player.x, player.y, player.w, player.h);
+    drawSprite(catNoAmmo, player.x, player.y, 48, 48, floor(animFrame), 5);
   } else if (moving) {
-    image(catMove, player.x, player.y, player.w, player.h);
+    drawSprite(catMove, player.x, player.y, 48, 48, floor(animFrame), 8);
   } else {
-    image(catIdle, player.x, player.y, player.w, player.h);
+    drawSprite(catIdle, player.x, player.y, 48, 48, floor(animFrame), 5);
   }
 
   if (keyIsDown(65)) player.x -= player.speed;
@@ -141,7 +159,7 @@ function drawPlayer() {
 }
 
 /* =========================
-   TIRO
+   TIRO DO HERÓI
 ========================= */
 function mousePressed() {
   if (ammo > 0) {
@@ -173,29 +191,29 @@ function drawBullets() {
 }
 
 /* =========================
-   ENEMY
+   INIMIGOS
 ========================= */
 function drawEnemies() {
   for (let e of enemies) {
     let d = dist(player.x, player.y, e.x, e.y);
 
-    if (d < 300) {
+    if (d < 350) {
       e.x += (player.x - e.x) * 0.01;
       e.y += (player.y - e.y) * 0.01;
     }
 
-    image(enemyFly, e.x, e.y, 48, 48);
+    drawSprite(enemyFly, e.x, e.y, 48, 48, floor(frameCount / 8) % 4, 4);
 
-    if (e.fireCooldown <= 0) {
+    if (e.cooldown <= 0) {
       fires.push({
         x: e.x,
         y: e.y,
         dx: (player.x - e.x) * 0.03,
         dy: (player.y - e.y) * 0.03
       });
-      e.fireCooldown = 120;
+      e.cooldown = 120;
     } else {
-      e.fireCooldown--;
+      e.cooldown--;
     }
   }
 
@@ -208,7 +226,7 @@ function drawEnemies() {
 }
 
 /* =========================
-   FIRE (INIMIGO)
+   FOGO DO INIMIGO
 ========================= */
 function drawFires() {
   for (let i = fires.length - 1; i >= 0; i--) {
@@ -225,7 +243,7 @@ function drawFires() {
 }
 
 /* =========================
-   HEART
+   CORAÇÃO (VIDA)
 ========================= */
 function drawHearts() {
   for (let i = hearts.length - 1; i >= 0; i--) {
@@ -246,19 +264,19 @@ function drawHUD() {
   fill(255);
   textSize(16);
   text("❤️ Vida: " + playerLife, 20, 30);
-  text("🔫 Munição: " + ammo + "/" + maxAmmo, 20, 55);
-  text("Fase: " + currentLevel, 20, 80);
+  text("🔫 Ammo: " + ammo + "/" + maxAmmo, 20, 55);
+  text("Stage: " + currentLevel, 20, 80);
 }
 
 /* =========================
-   LABIRINTO SIMPLES
+   LABIRINTO
 ========================= */
 function drawMaze() {
   stroke(80);
   strokeWeight(10);
-  line(200, 100, 200, 800);
-  line(500, 200, 900, 200);
-  line(700, 400, 700, 900);
+  line(300, 200, 300, 900);
+  line(600, 300, 1000, 300);
+  line(900, 400, 900, 900);
   noStroke();
 }
 </script>
